@@ -1,0 +1,10 @@
+arviz
+matplotlib
+numpy
+pandas
+seaborn
+joblib
+tqdm
+dataframe_image
+ipython
+phynalysis @ git+https://github.com/sirno/phynalysis@6fec8c6602c6a229b5e7698ed576a1b534a7ba71
