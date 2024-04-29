@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<beast beautitemplate='Standard'
+    beautistatus=''
+    namespace="beast.base.core:beast.base.evolution.alignment:beast.base.evolution.tree.coalescent:beast.base.util:beast.base.math:beast.evolution.nuc:beast.base.evolution.operator:beast.base.inference.operator:beast.base.evolution.sitemodel:beast.base.evolution.substitutionmodel:beast.base.evolution.likelihoodbeast.base.evolution.alignment:beast.pkgmgmt:beast.base.core:beast.base.inference:beast.base.evolution.tree.coalescent:beast.pkgmgmt:beast.base.core:beast.base.inference.util:beast.evolution.nuc:beast.base.evolution.operator:beast.base.inference.operator:beast.base.evolution.sitemodel:beast.base.evolution.substitutionmodel:beast.base.evolution.likelihood"
+    required=""
+    version="2.7">
+
+    <map name="Uniform">beast.base.inference.distribution.Uniform</map>
+    <map name="Exponential">beast.base.inference.distribution.Exponential</map>
+    <map name="LogNormal">beast.base.inference.distribution.LogNormalDistributionModel</map>
+    <map name="Normal">beast.base.inference.distribution.Normal</map>
+    <map name="Beta">beast.base.inference.distribution.Beta</map>
+    <map name="Gamma">beast.base.inference.distribution.Gamma</map>
+    <map name="LaplaceDistribution">beast.base.inference.distribution.LaplaceDistribution</map>
+    <map name="prior">beast.base.inference.distribution.Prior</map>
+    <map name="InverseGamma">beast.base.inference.distribution.InverseGamma</map>
+    <map name="OneOnX">beast.base.inference.distribution.OneOnX</map>
+
+    <!-- alignment and taxa-->
+    <data id="alignment"
+        dataType="nucleotide">
+{sequence_data}
+    </data>
+
+    <taxa id="taxa"
+        spec="TaxonSet"
+        alignment="@alignment"/>
+
+    <!-- time trait -->
+    <trait id="times"
+        spec="beast.base.evolution.tree.TraitSet"
+        traitname="date-backward">
+{time_data}
+        <taxa idref="taxa"/>
+    </trait>
+
+    <!-- type set -->
+    <typeSet id="type_set"
+        spec="beast.base.evolution.tree.TraitSet"
+        traitname="type">
+{type_data}
+        <taxa idref="taxa"/>
+    </typeSet>
+
+    <run id="mcmc"
+        spec="MCMC"
+        chainLength="100000000">
+        <state id="state"
+            spec="State"
+            storeEvery="10000">
+            <tree id="tree"
+                spec="beast.base.evolution.tree.Tree"
+                name="stateNode">
+                <trait idref="times"/>
+                <taxonset idref="taxa"/>
+            </tree>
+            <stateNode dimension="398"
+                id="rate_categories"
+                spec="parameter.IntegerParameter">1</stateNode>
+            <parameter id="Ne_constant"
+                spec="parameter.RealParameter"
+                lower="0.0"
+                name="stateNode">100.0</parameter>
+            <parameter id="migration_constant"
+                spec="parameter.RealParameter"
+                dimension="0"
+                lower="0.0"
+                name="stateNode">0.05</parameter>
+        </state>
+        <init id="random_tree"
+            spec="RandomTree"
+            estimate="false"
+            initial="@tree"
+            taxa="@alignment">
+            <populationModel id="constant_population"
+                spec="ConstantPopulation">
+                <parameter id="random_population_size"
+                    spec="parameter.RealParameter"
+                    name="popSize">200.0</parameter>
+            </populationModel>
+        </init>
+        <distribution id="posterior"
+            spec="CompoundDistribution">
+            <distribution id="prior"
+                spec="CompoundDistribution">
+                <distribution id="Mascot.t"
+                    spec="mascot.distribution.Mascot"
+                    tree="@tree">
+                    <dynamics id="Constant.t"
+                        spec="mascot.dynamics.Constant"
+                        Ne="@Ne_constant"
+                        backwardsMigration="@migration_constant"
+                        dimension="1">
+                        <typeTrait idref="type_set"/>
+                    </dynamics>
+                    <structuredTreeIntervals id="StructuredTreeIntervals.t"
+                        spec="mascot.distribution.StructuredTreeIntervals"
+                        tree="@tree"/>
+                </distribution>
+                <prior id="NeConstantPrior.t"
+                    name="distribution"
+                    x="@Ne_constant">
+                    <Uniform id="Uniform.1"
+                        name="distr"
+                        lower="1.0"
+                        upper="10000.0"/>
+                </prior>
+                <prior id="migrationConstantPrior.t"
+                    name="distribution"
+                    x="@migration_constant">
+                    <Uniform id="uniform_migration_constant"
+                      name="distr"
+                      upper="1.0"/>
+                    <!-- <Exponential id="Exponential.2" -->
+                    <!--     name="distr"> -->
+                    <!--     <mean id="Function$Constant.3" -->
+                    <!--         spec="Function$Constant" -->
+                    <!--         value="1.0"/> -->
+                    <!-- </Exponential> -->
+                </prior>
+            </distribution>
+            <distribution id="likelihood"
+                spec="CompoundDistribution"
+                useThreads="true">
+                <distribution id="treeLikelihood"
+                    spec="ThreadedTreeLikelihood"
+                    data="@alignment"
+                    tree="@tree">
+                    <siteModel id="SiteModel.s"
+                        spec="SiteModel">
+                        <parameter id="mutation_rate"
+                            spec="parameter.RealParameter"
+                            estimate="false"
+                            lower="0.0"
+                            name="mutationRate">2.16e-5</parameter>
+                        <parameter id="gammaShape.s"
+                            spec="parameter.RealParameter"
+                            estimate="false"
+                            lower="0.1"
+                            name="shape">1.0</parameter>
+                        <parameter id="proportionInvariant"
+                            spec="parameter.RealParameter"
+                            estimate="false"
+                            lower="0.0"
+                            name="proportionInvariant"
+                            upper="1.0">0.0</parameter>
+                        <substModel id="JC69.s"
+                            spec="JukesCantor"/>
+                    </siteModel>
+                    <branchRateModel id="relaxed_clock"
+                        rateCategories="@rate_categories"
+                        spec="beast.base.evolution.branchratemodel.UCRelaxedClockModel"
+                        tree="@tree"
+                        normalize="true">
+                        <Exponential id="Exponential"
+                            name="distr">
+                            <parameter id="UCExpLambda"
+                                name="mean">1.0</parameter>
+                        </Exponential>
+                    </branchRateModel>
+                </distribution>
+            </distribution>
+        </distribution>
+        <operator id="MascotBICEPSEpochTop.t"
+            spec="EpochFlexOperator"
+            scaleFactor="0.1"
+            tree="@tree"
+            weight="2.0"/>
+        <operator id="MascotBICEPSEpochAll.t"
+            spec="EpochFlexOperator"
+            fromOldestTipOnly="false"
+            scaleFactor="0.1"
+            tree="@tree"
+            weight="2.0"/>
+        <!--tree-operators-->
+        <operator id="MascotBICEPSTreeFlex.t"
+            spec="TreeStretchOperator"
+            scaleFactor="0.01"
+            tree="@tree"
+            weight="2.0"/>
+        <operator id="MascotTreeRootScaler.t"
+            spec="kernel.BactrianScaleOperator"
+            rootOnly="true"
+            scaleFactor="0.1"
+            tree="@tree"
+            upper="10.0"
+            weight="3.0"/>
+        <operator id="MascotUniformOperator.t"
+            spec="kernel.BactrianNodeOperator"
+            tree="@tree"
+            weight="30.0"/>
+        <operator id="MascotSubtreeSlide.t"
+            spec="kernel.BactrianSubtreeSlide"
+            tree="@tree"
+            weight="15.0"/>
+        <operator id="MascotNarrow.t"
+            spec="Exchange"
+            tree="@tree"
+            weight="0.0"/>
+        <operator id="MascotWide.t"
+            spec="Exchange"
+            isNarrow="false"
+            tree="@tree"
+            weight="3.0"/>
+        <operator id="MascotWilsonBalding.t"
+            spec="WilsonBalding"
+            tree="@tree"
+            weight="3.0"/>
+        <!--/tree-operators/-->
+        <!--relaxed-clock-operators-->
+        <operator id="ExpCategoriesRandomWalk"
+            parameter="@rate_categories"
+            spec="IntRandomWalkOperator"
+            weight="10.0"
+            windowSize="1"/>
+        <operator id="ExpCategoriesSwapOperator"
+            intparameter="@rate_categories"
+            spec="SwapOperator"
+            weight="10.0"/>
+        <operator id="ExpCategoriesUniform"
+            parameter="@rate_categories"
+            spec="UniformOperator"
+            weight="10.0"/>
+        <!--/relaxed-clock-operators/-->
+        <operator id="NeConstantScaler.t" spec="ScaleOperator" parameter="@Ne_constant" weight="3.0"/>
+        <operator id="migrationConstantScaler.t"
+            spec="ScaleOperator"
+            parameter="@migration_constant"
+            weight="3.0"/>
+        <logger id="tracelog"
+            spec="Logger"
+            fileName="$(filebase).log"
+            logEvery="5000"
+            model="@posterior"
+            sanitiseHeaders="true"
+            sort="smart">
+            <log idref="posterior"/>
+            <log idref="likelihood" />
+            <log idref="treeLikelihood"/>
+            <log idref="prior"/>
+            <log id="TreeHeight.t"
+                spec="beast.base.evolution.tree.TreeStatLogger"
+                tree="@tree"/>
+            <log branchratemodel="@relaxed_clock"
+                id="rateStat"
+                spec="beast.base.evolution.RateStatistic"
+                tree="@tree"/>
+            <log idref="Mascot.t"/>
+            <log idref="Constant.t"/>
+        </logger>
+        <logger id="screenlog"
+            spec="Logger"
+            logEvery="5000">
+            <log idref="posterior" />
+            <log idref="prior"/>
+            <log idref="Constant.t"/>
+            <log idref="migration_constant"/>
+        </logger>
+        <!--tree-operators-->
+        <logger id="treelog.t"
+            spec="Logger"
+            fileName="$(filebase).trees"
+            logEvery="5000"
+            mode="tree">
+            <log id="TreeWithMetaDataLogger.t"
+                branchratemodel="@relaxed_clock"
+                spec="beast.base.evolution.TreeWithMetaDataLogger"
+                tree="@tree"/>
+        </logger>
+        <!--/tree-operators/-->
+        <logger id="typedTreelogger.t"
+            spec="Logger"
+            fileName="$(filebase).typed.trees"
+            logEvery="5000"
+            mode="tree">
+            <log id="structuredTreelog.t"
+                spec="mascot.logger.StructuredTreeLogger"
+                mascot="@Mascot.t"/>
+        </logger>
+        <operatorschedule id="OperatorSchedule"
+            spec="OperatorSchedule"/>
+    </run>
+
+</beast>

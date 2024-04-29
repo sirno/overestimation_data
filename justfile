@@ -11,3 +11,6 @@ create_figures:
   for clock in strict_clock relaxed_clock; do \
     python notebooks/pvals.py --selector ${clock}; \
   done;
+
+list_xml:
+  find data -name "template.xml" | sort

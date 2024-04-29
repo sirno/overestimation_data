@@ -1,0 +1,93 @@
+default:
+    @just --list
+
+@beast DIR SEED="":
+    rm -f {{DIR}}/job_[0-9]*.{err,out}
+    sbatch \
+        --time 02-00 \
+        --cpus-per-task=1 \
+        --mem-per-cpu=1G \
+        --tmp=2G \
+        --job-name {{DIR}} \
+        --output {{DIR}}/job_%j.out \
+        --error {{DIR}}/job_%j.err \
+        --signal=B:SIGUSR1 \
+        scripts/beast_wrapper.sh {{DIR}} {{SEED}}
+
+@beast_array TASKLIST RANGE OFFSET="0":
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    sbatch \
+        --time 02-00 \
+        --cpus-per-task=1 \
+        --mem-per-cpu=1G \
+        --tmp=2G \
+        --job-name "beast|{{TASKLIST}}" \
+        --array {{RANGE}} \
+        --output logs/beast_array/%A_%a.out \
+        --error logs/beast_array/%A_%a.err \
+        --signal=B:SIGUSR1 \
+        scripts/beast_array_wrapper.sh {{TASKLIST}} {{OFFSET}}
+
+virolution DIR GENS TIME="04-00":
+    sbatch \
+        --time {{TIME}} \
+        --cpus-per-task=16 \
+        --mem-per-cpu=8G \
+        --job-name {{DIR}} \
+        --output {{DIR}}/job_%j.out \
+        --error {{DIR}}/job_%j.err \
+        scripts/virolution_wrapper.sh {{DIR}} {{GENS}}
+
+@virolution_array TASKLIST TIME THREADS MEM:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    n=$(awk '{ print }' {{TASKLIST}} | wc -l)
+    sbatch \
+        --time {{TIME}} \
+        --cpus-per-task={{THREADS}} \
+        --mem-per-cpu={{MEM}} \
+        --tmp=2G \
+        --job-name "virolution|{{TASKLIST}}" \
+        --array 0-$((n-1)) \
+        --output logs/virolution_array/%A-%a.out \
+        --error logs/virolution_array/%A-%a.err \
+        scripts/virolution_array_wrapper.sh {{TASKLIST}}
+
+
+create_checkpoint:
+    #!/usr/bin/env bash
+    squeue -h --format="%.18i %10P %j %8u %2t %10M %6D %R" | rg -o "\S*beast\S*" | while read -r line ; \
+        do echo "Create checkpoint for job with job_id=$line"
+        scancel --name $line --batch --signal=SIGUSR1
+    done
+
+find_pattern PATTERN:
+    squeue -h --format="%.18i %10P %j %8u %2t %10M %6D %R" | rg -o "\S*{{PATTERN}}\S*"
+
+cancel_pattern PATTERN:
+    #!/usr/bin/env bash
+    squeue -h --format="%.18i %10P %j %8u %2t %10M %6D %R" | rg -o "\S*{{PATTERN}}\S*" | while read -r line ;
+        do echo "Cancel job with job_id=$line"
+        scancel --name $line
+    done
+    
+
+cancel_all:
+    scancel -u ochsnern
+
+show_scratch:
+    find $SCRATCH/beast
+
+clear_scratch:
+    rm -r $SCRATCH/beast/*
+
+peek DIR ID:
+    less +G beast/{{DIR}}/run_{{ID}}/batch.log
+
+try:
+    sbatch --time 01:00 SeqSimEvo_passageSim --generation 1 --organism phix174 -n 400 --sampling 0 0 0 0 --init 10000 10000 10000 10000 --event "400 sampling 10 10 10 10" --output "400.fasta"
+
+snake:
+    sbatch --time 04-00 -o snake.out -J snake snakemake --profile slurm experiments/400/1/sim_data.log
+
