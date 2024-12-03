@@ -9,7 +9,7 @@ create_figures:
     done; \
   done;
   for clock in strict_clock relaxed_clock; do \
-    python notebooks/pvals.py --selector ${clock}; \
+    python notebooks/tables.py --selector ${clock}; \
   done;
 
 list_xml:
