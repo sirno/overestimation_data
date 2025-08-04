@@ -6,23 +6,24 @@ Migration Rate Estimates Under Selection".
 
 ## Abstract
 
-Phylodynamic methods are widely used to analyze the spread of viruses between
-and within hosts. For HIV-1, these methods have been used to estimate migration
-rates between different anatomical compartments within a host. However, these
-methods often assume that there is no selective pressure acting on the virus.
-Even though it is known that selection will affect the spread of viruses within
-a host, the impact of selection on the estimation of migration rates has not
-been tested. In this study, we used a novel agent-based simulation tool,
-`virolution`, to simulate the evolution of HIV-1 within different anatomical
-compartments of a host. We generated viral sequences and genealogies under two
-evolutionary scenarios: neutral evolution and selection-driven evolution.
-Through the application of Discrete Trait Analysis (DTA) and the MASCOT model
-in the Bayesian inference framework BEAST2, we identified significant biases in
-migration rate estimates induced by selection. Our results reveal that commonly
-used phylogeographic methods, which assume neutral selection, can significantly
-overestimate migration rates when selection is present. This study underscores
-the need for rigorous testing of phylodynamic models on data sets with
-realistic assumptions before their application.
+Phylodynamic methods are widely used to infer the population dynamics of
+viruses between and within hosts. For HIV-1, these methods have been used to
+estimate migration rates between different anatomical compartments within a
+host. These methods typically assume that the genomic regions used for
+reconstruction are evolving without selective pressure, even though other parts
+of the viral genome are known to experience strong selection. In this study, we
+investigate how selection affects phylodynamic migration rate estimates. To
+this end, we developed a novel agent-based simulation tool, `virolution`, to
+simulate the evolution of virus within two anatomical compartments of a host.
+Using this tool, we generated viral sequences and genealogies assuming both,
+neutral evolution and purifying selection that is concordant in both
+compartments. We found that, under the selection regime, migration rates are
+significantly overestimated with a stochastic mixture model and a structured
+coalescent model in the Bayesian inference framework BEAST2. Our results reveal
+that commonly used phylogeographic methods, which assume neutral evolution, can
+significantly bias migration rate estimates in selective regimes. This study
+underscores the need for assessing the robustness of phylodynamic analysis with
+respect to more realistic selection regimes.
 
 ## Data
 
@@ -31,8 +32,11 @@ from the BEAST2 analysis. We therefore provide access to the template XML
 files, the scripts used to generate the XML files, examples of BEAST2 XML and
 log files, and the scripts used to analyze the log files.
 
-Additionally, we provide the simulated sequences and genealogies used in the
-manuscript.
+Simulations were conducted with `virolution` as
+[doi:10.5281/zenodo.15827569](https://doi.org/10.5281/zenodo.15827569). Raw
+data and processed data is available at
+[doi:10.3929/ethz-b-000749260](https://doi.org/10.3929/ethz-b-000749260).
+
 
 ## Overview
 
