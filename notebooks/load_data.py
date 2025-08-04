@@ -1,13 +1,12 @@
 # %%
+import fnmatch
 import hashlib
 import os
-import fnmatch
 from pathlib import Path
 
 import arviz as az
 import numpy as np
 import pandas as pd
-
 from phynalysis.beast import read_beast_log
 from phynalysis.configs import BeastJobConfig
 
@@ -70,22 +69,39 @@ def get_migration_rates(row):
         trace = read_beast_log(row.path, burn_in=0.1)
         model_name = "/".join(row.template.split("/")[0:2])
         fields = MIGRATION_FIELDS[model_name]
-        hpi = az.stats.hdi(trace[fields[0]].values)
-        ess = az.ess(trace[fields[0]].values).reshape(-1)
-        n_samples = np.array(trace[fields[0]].shape[0], ndmin=1)
+        migration = trace[fields[0]].values
+        hpi = az.stats.hdi(migration)
+        ess = az.ess(migration).reshape(-1)
+        n_steps = np.array(migration.shape[0], ndmin=1)
+        if migration.shape[0] <= 100:
+            print(f"Warning: {row.path} has only {migration.shape[0]} steps.")
+        overestimation = np.mean(migration > row.migration_rate).reshape(-1)
         s = pd.Series(
-            np.concatenate((trace[fields].mean().values, hpi, ess, n_samples), axis=0),
-            index=["mean", "lower", "upper", "ess", "n_samples"],
+            np.concatenate(
+                (trace[fields].mean().values, hpi, ess, n_steps, overestimation),
+                axis=0,
+            ),
+            index=["mean", "lower", "upper", "ess", "n_steps", "overestimation"],
         )
         return s
     except KeyError as e:
         print(e)
+        global key_errors
+        global n_key_errors
         key_errors.append(e)
         n_key_errors += 1
-        return np.nan
+        return pd.Series(
+            [np.nan] * 6,
+            index=["mean", "lower", "upper", "ess", "n_steps", "overestimation"],
+        )
     except pd.errors.EmptyDataError:
+        global empty_data_errors
         empty_data_errors.append(row.path)
-        return np.nan
+        os.remove(row.path)
+        return pd.Series(
+            [np.nan] * 6,
+            index=["mean", "lower", "upper", "ess", "n_steps", "overestimation"],
+        )
     except:
         print("Error in", row.path)
         raise
@@ -127,19 +143,37 @@ MIGRATION_FIELDS = {
 
 
 def load_data(prefix, identifier, log_files, force=False, show_exponential=False):
-    print(Path(f"{prefix}/out/cache/{identifier}.csv"))
-    if force or not Path(f"{prefix}/out/cache/{identifier}.csv").exists():
+    """This function loads the data from the log files and processes it.
+
+    The output is a dataframe with following columns:
+        - multiple columns with simulation and inference parameters
+        - mean: the mean of the migration rate
+        - lower: the lower bound of the 95% HPD interval
+        - upper: the upper bound of the 95% HPD interval
+        - ess: the effective sample size of the migration rate
+        - n_steps: the number of steps in the trace
+        - overestimation: the fraction of steps where the inferred migration
+          rate is greater than the true migration rate
+    """
+
+    cache_path = Path(f"{prefix}/out/cache/{identifier}.csv")
+    print(f"Attempt to load data from {cache_path.name}")
+
+    # if the cache does not exist or force is True, process the data
+    if force or not cache_path.exists():
         # process data and save it
         print(f"Processing {len(log_files)} files")
         configs_raw = (get_config(path) for path in log_files)
         configs = pd.DataFrame(configs_raw)
         inferred_rates = configs.progress_apply(get_migration_rates, axis=1)
-        configs[["mean", "lower", "upper", "ess", "n_samples"]] = inferred_rates
+        if empty_data_errors:
+            print("--- --- ---")
+            print("Empty data errors: ", len(empty_data_errors))
+        configs[["mean", "lower", "upper", "ess", "n_steps", "overestimation"]] = (
+            inferred_rates
+        )
         configs.to_csv(f"{prefix}/out/cache/{identifier}.csv")
         print("--- --- ---")
-        if empty_data_errors:
-            print("Empty data errors: ", len(empty_data_errors))
-            print("--- --- ---")
 
     data = pd.read_csv(f"{prefix}/out/cache/{identifier}.csv", index_col=0)
     data["method"] = data.template.map(lambda x: x.split("/")[1])
@@ -156,7 +190,9 @@ def load_data(prefix, identifier, log_files, force=False, show_exponential=False
     if data.pop_size.unique().shape[0] > 1:
         data = data.query("pop_size == 'tiny'")
 
-    print(data.groupby(["template", "tree"]).size())
-    print("--- --- ---")
+    print("===================")
+    print("LOADED DATA REPORT")
+    print("===================")
+    print(data.groupby(["template", "tree", "n_samples"]).size())
 
     return data

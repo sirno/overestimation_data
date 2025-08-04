@@ -6,7 +6,7 @@ from glob import glob
 import dataframe_image as dfi
 import numpy as np
 import pandas as pd
-from load_data import is_notebook
+from common import is_notebook
 
 
 # %%
@@ -34,6 +34,8 @@ def table_styles(width):
 
 
 # %%
+print("Create tables for various statistics...")
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
@@ -45,6 +47,7 @@ if is_notebook():
         args=[
             "--glob-type",
             "relaxed_clock",
+            # "tests/no_geo_prior/pop_tiny",
         ]
     )
     prefix = ".."
@@ -55,13 +58,17 @@ else:
 
 glob_type = args.glob_type
 ancestry_name = "true"
-sampled_name = "recon"
+sampled_name = "reconstructed"
+
+print(f"Using glob type: {glob_type}")
 
 
 # %%
 def load_data(glob_type, data_type):
     files = glob(f"{prefix}/figures/{data_type}/{glob_type}_*.csv")
-    data = pd.concat([pd.read_csv(f, dtype={"mutation_rate": str}) for f in files])
+    data = pd.concat(
+        [pd.read_csv(f, dtype={"n_samples": int, "mutation_rate": str}) for f in files]
+    )
     data = data[data.migration_rate <= 1e-2]
     data["migration_rate"] = data.migration_rate.apply(lambda x: f"{x:.0e}")
     data["tree"] = data.tree.apply(
@@ -108,8 +115,17 @@ def style_pvals(pvals, index):
         values="pval",
     )
     pvals_grid.columns.names = ["selection", "migration rate"]
-    pvals_grid.index.rename([x.replace("_", " ") for x in index], inplace=True)
-    pvals_grid.sort_index(inplace=True, ascending=[True, False, True])
+    pvals_grid.index.rename(
+        {
+            "n_samples": "n samples",
+            "population_size": "population size",
+            "mutation_rate": "mutation rate\nper bp per generation",
+            "method": "method",
+            "tree": "tree",
+        },
+        inplace=True,
+    )
+    pvals_grid.sort_index(inplace=True, ascending=[False, True, False, True])
 
     # Apply the styling
     pvals_styled = (
@@ -123,14 +139,27 @@ def style_pvals(pvals, index):
 # %%
 pvals.reset_index(inplace=True, drop=True)
 pvals_styled = style_pvals(
-    pvals, index=["population_size", "mutation_rate", "method", "tree"]
+    pvals, index=["n_samples", "population_size", "mutation_rate", "method", "tree"]
+)
+dfi.export(
+    pvals_styled,
+    f"{prefix}/figures/pvals_mean/{glob_type}_all_samples.png",
+    max_cols=-1,
+)
+pvals_styled
+
+# %%
+pvals_all = pvals.query("n_samples == 200").copy()
+pvals_all.reset_index(inplace=True, drop=True)
+pvals_styled = style_pvals(
+    pvals_all, index=["n_samples", "population_size", "mutation_rate", "method", "tree"]
 )
 dfi.export(pvals_styled, f"{prefix}/figures/pvals_mean/{glob_type}.png", max_cols=-1)
 pvals_styled
 
 # %%
-pvals_tiny = pvals[pvals.population_size == 100].copy()
-pvals_tiny.drop(columns=["population_size"], inplace=True)
+pvals_tiny = pvals.query("population_size == 100 and n_samples == 200").copy()
+pvals_tiny.drop(columns=["n_samples", "population_size"], inplace=True)
 pvals_tiny.reset_index(inplace=True, drop=True)
 
 pvals_styled = style_pvals(pvals_tiny, index=["mutation_rate", "method", "tree"])
@@ -140,7 +169,7 @@ dfi.export(
 pvals_styled
 
 # %%
-pvals_small = pvals[pvals.population_size == 1000].copy()
+pvals_small = pvals.query("population_size == 1000").copy()
 pvals_small.drop(columns=["population_size"], inplace=True)
 pvals_small.reset_index(inplace=True, drop=True)
 
@@ -162,14 +191,21 @@ mse.sort_values(
 )
 mse.drop("migration_rate_value", axis=1, inplace=True)
 mse_grid = mse.pivot(
-    index=["population_size", "mutation_rate", "method", "tree"],
+    index=["n_samples", "population_size", "mutation_rate", "method", "tree"],
     columns=["selection", "migration_rate"],
     values="mse",
 )
 mse_grid.index.rename(
-    ["population size", "mutation rate", "method", "tree"], inplace=True
+    [
+        "n_samples",
+        "population size",
+        "mutation rate\nper bp per generation",
+        "method",
+        "tree",
+    ],
+    inplace=True,
 )
-mse_grid.sort_index(inplace=True, ascending=[True, False, True])
+mse_grid.sort_index(inplace=True, ascending=[False, True, False, True])
 mse_grid_styled = (
     mse_grid.style.format("{:.2e}")
     .set_table_styles(table_styles(width=mse_width))
@@ -184,8 +220,8 @@ dfi.export(mse_grid_styled, f"{prefix}/figures/mse_mean/{glob_type}.png", max_co
 mse_grid_styled
 
 # %%
-mse_tiny = mse[mse.population_size == 100].copy()
-mse_tiny.drop(columns=["population_size"], inplace=True)
+mse_tiny = mse.query("population_size == 100 and n_samples == 200").copy()
+mse_tiny.drop(columns=["n_samples", "population_size"], inplace=True)
 mse_tiny.reset_index(inplace=True, drop=True)
 
 mse_grid = mse_tiny.pivot(
@@ -211,7 +247,7 @@ dfi.export(
 mse_grid_styled
 
 # %%
-mse_small = mse[mse.population_size == 1000].copy()
+mse_small = mse.query("population_size == 1000").copy()
 mse_small.drop(columns=["population_size"], inplace=True)
 mse_small.reset_index(inplace=True, drop=True)
 
@@ -264,7 +300,7 @@ pvals_selection["migration_rate"] = pvals_selection.migration_rate.map(
     lambda x: float(x)
 )
 pvals_selection_table = pvals_selection.pivot(
-    index=["population_size", "mutation_rate", "method", "tree"],
+    index=["n_samples", "population_size", "mutation_rate", "method", "tree"],
     columns=["migration_rate"],
     values="pval",
 )
@@ -272,7 +308,14 @@ pvals_selection_table = pvals_selection.pivot(
 pvals_selection_table.columns = pvals_selection_table.columns.map(lambda x: f"{x:.0e}")
 pvals_selection_table.columns.name = "migration rate"
 pvals_selection_table.index.rename(
-    ["population size", "mutation rate", "method", "tree"], inplace=True
+    [
+        "n_samples",
+        "population size",
+        "mutation rate\nper bp per generation",
+        "method",
+        "tree",
+    ],
+    inplace=True,
 )
 
 pvals_selection_table_styled = (
@@ -305,12 +348,19 @@ overestimation.sort_values(
 )
 overestimation.drop("migration_rate_value", axis=1, inplace=True)
 overestimation_grid = overestimation.pivot(
-    index=["population_size", "mutation_rate", "method", "tree"],
+    index=["n_samples", "population_size", "mutation_rate", "method", "tree"],
     columns=["selection", "migration_rate"],
     values="overestimation",
 )
 overestimation_grid.index.rename(
-    ["population size", "mutation rate", "method", "tree"], inplace=True
+    [
+        "n_samples",
+        "population size",
+        "mutation rate\nper bp per generation",
+        "method",
+        "tree",
+    ],
+    inplace=True,
 )
 overestimation_grid.sort_index(inplace=True, ascending=[True, False, True])
 overestimation_grid_styled = (
@@ -338,18 +388,27 @@ overestimation_selection["migration_rate"] = (
     overestimation_selection.migration_rate.map(lambda x: float(x))
 )
 overestimation_selection_grid = overestimation_selection.pivot(
-    index=["population_size", "mutation_rate", "method", "tree"],
+    index=["n_samples", "population_size", "mutation_rate", "method", "tree"],
     columns=["migration_rate"],
-    values="overestimation",
+    values="overestimation_selection",
 )
 overestimation_selection_grid.index.rename(
-    ["population size", "mutation rate", "method", "tree"], inplace=True
+    [
+        "n_samples",
+        "population size",
+        "mutation rate\nper bp per generation",
+        "method",
+        "tree",
+    ],
+    inplace=True,
 )
 overestimation_selection_grid.columns = overestimation_selection_grid.columns.map(
     lambda x: f"{x:.0e}"
 )
 overestimation_selection_grid.columns.name = "migration rate"
-overestimation_selection_grid.sort_index(inplace=True, ascending=[True, False, True])
+overestimation_selection_grid.sort_index(
+    inplace=True, ascending=[False, True, False, True]
+)
 overestimation_selection_grid_styled = (
     overestimation_selection_grid.style.format("{:.2f}")
     .set_table_styles(table_styles(width=overestimation_width))
@@ -366,4 +425,4 @@ dfi.export(
     max_cols=-1,
     dpi=200,
 )
-o
+overestimation_selection_grid_styled

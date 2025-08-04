@@ -6,8 +6,14 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.io as pio
 import scipy as sp
 import seaborn as sns
+from matplotlib.lines import Line2D
+from matplotlib.ticker import FormatStrFormatter, FuncFormatter, StrMethodFormatter
+from phynalysis.beast import read_beast_log
+from phynalysis.transform import _ENCODING, haplotype_to_list
 
 try:
     from IPython.display import Markdown
@@ -22,10 +28,14 @@ from load_data import (
     get_migration_rates,
     is_notebook,
     load_data,
+    write_data,
 )
 from tqdm import tqdm
 
 tqdm.pandas()
+
+pio.renderers.default = "browser"
+pio.templates.default = "seaborn"
 
 
 # %%
@@ -83,6 +93,7 @@ experiment_group = [
     "migration_rate",
     "selection",
     "tree",
+    "n_samples",
 ]
 
 if not is_notebook():
@@ -113,10 +124,26 @@ data = load_data(
     show_exponential=show_exponential,
 )
 
+all_query = "n_samples == 200"
+
 
 # %%
 def get_query(method, tree, query="time_eq_1000"):
     return f"method == '{method}' and tree == '{tree}' and query == '{query}'"
+
+
+def tick_formatter(x, pos):
+    """Format the ticks on the x-axis to show scientific notation."""
+    multiplier = 10**3
+    epsilon = 1e-9
+
+    rounded_value = round(x * multiplier) / multiplier
+
+    if abs(x - rounded_value) > epsilon:
+        return ""
+    else:
+        # If it matches the precision, format it and remove trailing zeros
+        return f"{x:.3g}"
 
 
 def plot_migration_rates(template, data, ylim=None, xlim=None):
@@ -259,7 +286,6 @@ def plot_migration_rates_all(data, alpha=0.1, xlim=None, ylim=None):
         bbox_to_anchor=(1, 0.5),
         borderaxespad=0.0,
     )
-
     for ax in axes.flat:
         # h, l = ax.get_legend_handles_labels()
         # ax.legend(h[:-2], l[:-2])
@@ -269,6 +295,8 @@ def plot_migration_rates_all(data, alpha=0.1, xlim=None, ylim=None):
         if xlim is not None:
             ax.set_xlim(*xlim)
 
+    fig.gca().yaxis.set_major_formatter(FuncFormatter(tick_formatter))
+    fig.gca().xaxis.set_major_formatter(StrMethodFormatter("{x:.3g}"))
     fig.tight_layout()
     fig.subplots_adjust(left=0.15, top=0.95, right=0.88)
 
@@ -277,39 +305,34 @@ def plot_migration_rates_all(data, alpha=0.1, xlim=None, ylim=None):
 ## Migration rates
 
 # %%
-plot_migration_rates_all(data, alpha=0.1, xlim=(0.0, 0.01), ylim=(0.0, 0.02))
+plot_migration_rates_all(
+    data.query(all_query), alpha=0.1, xlim=(0.0, 0.01), ylim=(0.0, 0.02)
+)
 
 os.makedirs(f"{prefix}/figures/migration_rates", exist_ok=True)
 plt.savefig(
-    f"{prefix}/figures/migration_rates/{selector_label}.pdf", bbox_inches="tight"
+    f"{prefix}/figures/migration_rates/{selector_label}.pdf",
+    bbox_inches="tight",
 )
 
-# %% [markdown]
-## Lemey
-
 # %%
-plot_migration_rates("beast/lemey", data, ylim=(0.0, 0.02), xlim=(0.0, 0.01))
 
-plt.savefig(
-    f"{prefix}/figures/migration_rates/lemey_{selector_label}.pdf", bbox_inches="tight"
-)
+for i in data.n_samples.unique():
+    local_data = data.query(f"n_samples == {i} and query == 'time_eq_1000'")
+    max_average_migration_rate = (
+        local_data.groupby(experiment_group)["mean"].mean().max()
+    )
+    y_max = max(
+        0.02,
+        max_average_migration_rate * 1.2,
+    )
+    plot_migration_rates_all(local_data, alpha=0.1, xlim=(0.0, 0.01), ylim=(0.0, y_max))
 
-# %% [markdown]
-## Mascot
-
-# %%
-plot_migration_rates("beast/mascot", data, ylim=(0.0, 0.02), xlim=(0.0, 0.01))
-
-plt.savefig(
-    f"{prefix}/figures/migration_rates/mascot_{selector_label}.pdf", bbox_inches="tight"
-)
-
-# %% [markdown]
-## BDMM
-
-# %%
-# plot_migration_rates("beast/bdmm", data, ylim=(0.0, 0.5))
-
+    os.makedirs(f"{prefix}/figures/migration_rates", exist_ok=True)
+    plt.savefig(
+        f"{prefix}/figures/migration_rates/{selector_label}_{i}_samples.pdf",
+        bbox_inches="tight",
+    )
 
 # %%
 # functions to plot the posterior distribution of the migration rate
@@ -432,64 +455,27 @@ def plot_posterior_all(data, alpha=0.1, ylim=None):
 
 # %% [markdown]
 ## Migration rate posterior
-plot_posterior_all(data, alpha=0.1, ylim=None)
+
+# %%
+plot_posterior_all(data.query(all_query), alpha=0.1, ylim=None)
 
 os.makedirs(f"{prefix}/figures/migration_rate_hpd", exist_ok=True)
 plt.savefig(
     f"{prefix}/figures/migration_rate_hpd/{selector_label}.pdf", bbox_inches="tight"
 )
+plt.close()
 
 # %%
+for i in data.n_samples.unique():
+    plot_posterior_all(data.query(f"n_samples == {i}"), alpha=0.1, ylim=None)
 
-# %% [markdown]
-## Lemey
+    os.makedirs(f"{prefix}/figures/migration_rate_hpd", exist_ok=True)
+    plt.savefig(
+        f"{prefix}/figures/migration_rate_hpd/{selector_label}_{i}_samples.pdf",
+        bbox_inches="tight",
+    )
+    plt.close()
 
-# %%
-template = "beast/lemey"
-plot_posterior(
-    data.query(f"template.str.startswith('{template}') and query == 'time_eq_1000'"),
-    0.1,
-    # ylim=(0.0, 0.2),
-)
-
-plt.savefig(
-    f"{prefix}/figures/migration_rate_hpd/lemey_{selector_label}.pdf",
-    bbox_inches="tight",
-)
-
-# %% [markdown]
-## Mascot
-
-# %%
-template = "beast/mascot"
-plot_posterior(
-    data.query(f"template.str.startswith('{template}') and query == 'time_eq_1000'"),
-    0.1,
-    # ylim=(0.0, 0.2),
-)
-
-plt.savefig(
-    f"{prefix}/figures/migration_rate_hpd/{selector_label}.pdf", bbox_inches="tight"
-)
-
-# %% [markdown]
-## BDMM
-
-# %%
-# template = "beast/bdmm"
-# plot_posterior(
-#     data.query(f"template.str.startswith('{template}') and query == 'time_eq_1000'"),
-#     0.1,
-#     # ylim=(0.0, 0.5),
-# )
-
-# %%
-# plot the effective sample size of the migration rate by selection
-sns.boxplot(data=data, x="template", y="ess", hue="selection")
-
-# %%
-# plot the total number of samples by tree
-sns.boxplot(data=data, x="template", y="n_samples", hue="tree")
 
 # %% [markdown]
 ## Statistical tests
@@ -506,6 +492,7 @@ pvals = (
             "selection",
             "tree",
             "migration_rate",
+            "n_samples",
         ]
     )[["migration_rate", "mean"]]
     .apply(
@@ -525,6 +512,7 @@ index = pd.MultiIndex.from_product(
         selections,
         trees,
         migration_rates,
+        data.n_samples.unique(),
     ],
     names=[
         "method",
@@ -533,6 +521,7 @@ index = pd.MultiIndex.from_product(
         "selection",
         "tree",
         "migration_rate",
+        "n_samples",
     ],
 )
 
@@ -545,6 +534,7 @@ pvals = (
             "selection",
             "tree",
             "migration_rate",
+            "n_samples",
         ]
     )
     .reindex(index)
@@ -554,9 +544,6 @@ pvals = (
 if not selector.startswith("tests"):
     os.makedirs(f"{prefix}/figures/pvals_mean", exist_ok=True)
     pvals.to_csv(f"{prefix}/figures/pvals_mean/{selector_label}.csv", index=False)
-
-# %%
-pvals
 
 
 # %%
@@ -597,16 +584,22 @@ def plot_pvals(data, method):
 
 # %%
 os.makedirs(f"{prefix}/figures/misc", exist_ok=True)
-plot_pvals(pvals, "lemey")
-plt.savefig(
-    f"{prefix}/figures/misc/lemey_pvals_{selector_label}.pdf", bbox_inches="tight"
-)
+for i in data.n_samples.unique():
+    plot_pvals(pvals.query(f"n_samples == {i}"), "lemey")
+    plt.savefig(
+        f"{prefix}/figures/misc/lemey_pvals_{selector_label}_{i}_samples.pdf",
+        bbox_inches="tight",
+    )
+    plt.close()
 
 # %%
-plot_pvals(pvals, "mascot")
-plt.savefig(
-    f"{prefix}/figures/misc/mascot_pvals_{selector_label}.pdf", bbox_inches="tight"
-)
+for i in data.n_samples.unique():
+    plot_pvals(pvals.query(f"n_samples == {i}"), "mascot")
+    plt.savefig(
+        f"{prefix}/figures/misc/mascot_pvals_{selector_label}_{i}_samples.pdf",
+        bbox_inches="tight",
+    )
+    plt.close()
 
 # %%
 # Visualize distribution of fitness effects empirically
@@ -1010,10 +1003,11 @@ grid_axes[0, 0].set_title("based on pylogenetic reconstruction")
 grid_axes[0, 1].set_title("based on true genealogy")
 
 os.makedirs(f"{prefix}/figures/posterior_overestimation_probability", exist_ok=True)
-plt.savefig(
-    f"{prefix}/figures/posterior_overestimation_probability/{selector_label}.pdf",
-    bbox_inches="tight",
-)
+for i in data.n_samples.unique():
+    plt.savefig(
+        f"{prefix}/figures/posterior_overestimation_probability/{selector_label}_{i}_samples.pdf",
+        bbox_inches="tight",
+    )
 
 # %% [markdown]
 ## Gather statistics for posterior overestimation probability
@@ -1022,7 +1016,6 @@ plt.savefig(
 overestimation_stats = (
     data.groupby(experiment_group)[["overestimation"]].agg("mean").reset_index()
 )
-overestimation_stats
 
 # %%
 os.makedirs(f"{prefix}/figures/overestimation_stats", exist_ok=True)
@@ -1077,12 +1070,28 @@ def compute_overestimation_selection_stats(group):
     return sum(overestimations) / len(overestimations)
 
 
-overestimation_selection_stats = (
-    data.groupby(list(set(experiment_group) - {"selection"}))[["path", "selection"]]
-    .progress_apply(compute_overestimation_selection_stats)
-    .rename("overestimation")
-    .reset_index()
-)
+if "overestimation_selection" not in data.columns:
+    print("Adding overestimation selection to data")
+    overestimation_selection = (
+        data.groupby(list(set(experiment_group) - {"selection"}))[["path", "selection"]]
+        .progress_apply(compute_overestimation_selection_stats)
+        .rename("overestimation_selection")
+        .reset_index()
+    )
+
+    # update data with probability of overestimation due to selection
+    data = pd.merge(
+        data,
+        overestimation_selection,
+        on=list(set(experiment_group) - {"selection"}),
+    )
+
+    write_data(data, prefix, identifier)
+
+overestimation_selection_stats = data[
+    list(set(experiment_group) - {"selection"}) + ["overestimation_selection"]
+].drop_duplicates()
+
 
 # %%
 os.makedirs(f"{prefix}/figures/overestimation_selection_stats", exist_ok=True)
@@ -1091,11 +1100,9 @@ overestimation_selection_stats.to_csv(
 )
 
 # %%
-overestimation_selection_stats
-
 average_overestimation_selection_stats = overestimation_selection_stats.groupby(
     list(set(experiment_group) - {"selection", "migration_rate"})
-).mean()
+)[["overestimation_selection"]].mean()
 
 average_overestimation_selection_stats.to_csv(
     f"{prefix}/figures/overestimation_selection_stats/avg_{selector_label}.csv",
@@ -1105,15 +1112,164 @@ average_overestimation_selection_stats.to_csv(
 # %%
 average_overestimation_stats = overestimation_stats.groupby(
     list(set(experiment_group) - {"migration_rate"})
-).mean()
+)[["overestimation"]].mean()
 average_overestimation_stats.to_csv(
     f"{prefix}/figures/overestimation_stats/avg_{selector_label}.csv", index=False
 )
 
-# %%
-average_overestimation_stats.reset_index().set_index(
-    ["method", "selection", "tree"]
-).sort_index()
 
 # %%
-average_overestimation_selection_stats.reset_index().set_index(["method", "tree"])
+# Get mutations
+def find_mutations(haplotype_data: pd.DataFrame, reference: str) -> np.ndarray:
+    """Find all mutations in the haplotype data."""
+    mutated = np.zeros((len(reference), 4), dtype=int)
+
+    haplotype_data = haplotype_data.set_index(["haplotype"])
+    for haplotype, row in haplotype_data.iterrows():
+        mutations = haplotype_to_list(haplotype)
+        for mutation in mutations:
+            if isinstance(mutation[1], str):
+                # Skip mutations with non-nucleotide characters
+                # This can happen when the alignment incorrectly detects an
+                # insertion or deletion
+                continue
+            position, (_, nucleotide) = mutation
+            position = int(position)
+            if isinstance(nucleotide, str):
+                nucleotide = _ENCODING[nucleotide]
+            mutated[position, nucleotide] += 1
+
+    return mutated
+
+
+# Calculate mutation frequency from haplotypes
+def calculate_nucleotide_frequency(
+    haplotype_data: pd.DataFrame, reference: str
+) -> np.ndarray:
+    """Calculate the mutation frequency from sequence of haplotypes."""
+    n_samples = haplotype_data["count"].sum()
+
+    counts = np.zeros((len(reference), 4), dtype=float)
+    for i, nucleotide in enumerate(reference):
+        counts[i, _ENCODING[nucleotide]] = n_samples
+
+    haplotype_data = haplotype_data.set_index(["haplotype"])
+    for haplotype, row in haplotype_data.iterrows():
+        mutations = haplotype_to_list(haplotype)
+
+        for mutation in mutations:
+            if isinstance(mutation[1], str):
+                # Skip mutations with non-nucleotide characters
+                # This can happen when the alignment incorrectly detects an
+                # insertion or deletion
+                continue
+
+            position, (_, nucleotide) = mutation
+            position = int(position)
+            if isinstance(nucleotide, str):
+                nucleotide = _ENCODING[nucleotide]
+
+            counts[position, nucleotide] += row["count"]
+            counts[position, _ENCODING[reference[position]]] -= row["count"]
+
+    return counts / n_samples
+
+
+def compute_distance(path):
+    """Compute the similarity between two compartments."""
+    haplotypes = pd.read_csv(
+        os.path.join(os.path.dirname(path), "samples.haplotypes.csv")
+    )
+
+    mutations1 = find_mutations(haplotypes.query("compartment == 0"), reference) >= 1
+    mutations2 = find_mutations(haplotypes.query("compartment == 1"), reference) >= 1
+
+    n_mutations_intersect = (mutations1 & mutations2).sum()
+    n_mutations_joint = (mutations1 | mutations2).sum()
+
+    homoplasticity = n_mutations_intersect / n_mutations_joint
+
+    return n_mutations_intersect, n_mutations_joint, homoplasticity
+
+
+if (
+    "homoplasticity" not in data.columns
+    or "n_mutations_joint" not in data.columns
+    or "n_mutations_intersect" not in data.columns
+):
+    print("Adding homoplasticity to data")
+    with open(
+        f"{prefix}/data/reference/hiv_generated.fasta", "r", encoding="utf8"
+    ) as file_descriptor:
+        reference = "".join(file_descriptor.read().splitlines()[1:])
+
+    output = data.path.progress_apply(compute_distance)
+    output_df = pd.DataFrame(output.tolist())
+    data[["n_mutations_joint", "n_mutations_intersect", "homoplasticity"]] = output_df
+
+    write_data(data, prefix, identifier)
+
+# %%
+# Plot homoplasticity agains bias
+data["bias"] = data["mean"] - data["migration_rate"]
+n_samples = np.sort(data.n_samples.unique())
+
+os.makedirs(f"{prefix}/figures/population_homoplasticity", exist_ok=True)
+
+for i in n_samples:
+    local_data = data.query(f"n_samples == {i} and query == 'time_eq_1000'")
+    title = f"bias | {selector_label} | {i} samples"
+    fig = px.scatter(
+        local_data,
+        x="homoplasticity",
+        y="bias",
+        color="selection",
+        hover_data=["migration_rate", "method", "tree"],
+        opacity=0.3,
+        marginal_x="box",
+        marginal_y="box",
+    )
+    fig.update_layout(
+        legend={
+            "x": 0.8,
+            "y": 1.0,
+        },
+        xaxis={
+            "title": "Homoplasticity (fraction of mutations shared between compartments)",
+        },
+        yaxis={
+            "title": "Bias (posterior mean - true migration rate)",
+        },
+    )
+    fig.write_image(
+        f"{prefix}/figures/population_homoplasticity/bias_{selector_label}_{i}_samples.pdf",
+        width=800,
+        height=600,
+    )
+
+# Plot homoplasticity against migration rate
+for i in n_samples:
+    local_data = data.query(
+        f"n_samples == {i} and query == 'time_eq_1000' and method == 'DTA' and tree == 'ancestry'"
+    )
+    title = f"homoplasticity | {selector_label} | {i} samples"
+    fig = px.box(
+        local_data,
+        x="migration_rate",
+        y="homoplasticity",
+        color="selection",
+    )
+    fig.update_xaxes(
+        ticks="outside",
+        tick0=0.0,
+        dtick=0.001,
+        title="Migration rate (mutations per site per generation)",
+    )
+    fig.update_yaxes(
+        title="Homoplasticity<br>(fraction of mutations shared between compartments)",
+    )
+    fig.write_image(
+        f"{prefix}/figures/population_homoplasticity/migration_rate_{selector_label}_{i}_samples.pdf",
+        width=800,
+        height=600,
+    )
