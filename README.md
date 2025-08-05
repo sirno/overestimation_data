@@ -32,11 +32,11 @@ from the BEAST2 analysis. We therefore provide access to the template XML
 files, the scripts used to generate the XML files, examples of BEAST2 XML and
 log files, and the scripts used to analyze the log files.
 
-Simulations were conducted with `virolution` as
-[doi:10.5281/zenodo.15827569](https://doi.org/10.5281/zenodo.15827569). Raw
-data and processed data is available at
+Additionally, raw and processed data is available in the research collection at
 [doi:10.3929/ethz-b-000749260](https://doi.org/10.3929/ethz-b-000749260).
 
+The simulations were conducted with `virolution` as archived at
+[doi:10.5281/zenodo.15827569](https://doi.org/10.5281/zenodo.15827569).
 
 ## Overview
 
@@ -52,19 +52,18 @@ The repository is organized as follows:
 
 ## Usage
 
-Install dependencies:
+This repository can be used with [`uv`](https://github.com/astral-sh/uv).
 
 ```bash
-pip install -r requirements.txt
+pip install uv
 ```
 
 ### Data Analysis
 
-If you have [just](https://github.com/caseyjust/just) installed, you can run
-the analysis with:
+To run the data analysis and generate all figures based on the processed data:
 
 ```bash
-just create_figures
+uv run scripts/create_figures.sh --load-store
 ```
 
 This command will generate the figures in the `figures/` folder, based on the
@@ -83,7 +82,7 @@ organized in subdirectories according to the method and scenario used in the
 analysis. Get an overview of the XML files with:
 
 ```bash
-just list_xml
+find data -name "template.xml" | sort
 ```
 
 The template XML files contain placeholders for the sequences, times, and types

@@ -1,4 +1,3 @@
-# %%
 import fnmatch
 import hashlib
 import os
@@ -14,7 +13,7 @@ from phynalysis.configs import BeastJobConfig
 # %%
 def is_notebook() -> bool:
     try:
-        from IPython import get_ipython
+        from IPython.core.getipython import get_ipython
 
         shell = get_ipython().__class__.__name__
         if shell == "ZMQInteractiveShell":
@@ -25,10 +24,12 @@ def is_notebook() -> bool:
             return False  # Other type (?)
     except NameError:
         return False  # Probably standard Python interpreter
+    except ModuleNotFoundError:
+        return False
 
 
 # %%
-def fast_scandir(dirname):
+def fast_scandir(dirname, exclude=None):
     """Recursively scan for run.log files in subdirectories.
 
     Args:
@@ -40,6 +41,8 @@ def fast_scandir(dirname):
     matches = []
     for root, dirnames, filenames in os.walk(dirname):
         for filename in fnmatch.filter(filenames, "run.log"):
+            if exclude is not None and any(e in root for e in exclude):
+                continue
             matches.append(os.path.join(root, filename))
     return matches
 
@@ -152,10 +155,7 @@ def load_data(prefix, identifier, log_files, force=False, show_exponential=False
         - upper: the upper bound of the 95% HPD interval
         - ess: the effective sample size of the migration rate
         - n_steps: the number of steps in the trace
-        - overestimation: the fraction of steps where the inferred migration
-          rate is greater than the true migration rate
     """
-
     cache_path = Path(f"{prefix}/out/cache/{identifier}.csv")
     print(f"Attempt to load data from {cache_path.name}")
 
@@ -196,3 +196,7 @@ def load_data(prefix, identifier, log_files, force=False, show_exponential=False
     print(data.groupby(["template", "tree", "n_samples"]).size())
 
     return data
+
+
+def write_data(data, prefix, identifier):
+    data.to_csv(f"{prefix}/out/cache/{identifier}.csv")

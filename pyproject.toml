@@ -1,0 +1,21 @@
+[project]
+name = "overestimations-data"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "arviz>=0.22.0",
+    "dataframe-image>=0.2.7",
+    "ipython>=9.4.0",
+    "joblib>=1.5.1",
+    "kaleido>=1.0.0",
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.2",
+    "pandas>=2.3.1",
+    "phynalysis",
+    "plotly>=6.2.0",
+    "seaborn>=0.13.2",
+    "tqdm>=4.67.1",
+]
+
+[tool.uv.sources]
+phynalysis = { git = "https://github.com/sirno/phynalysis", rev = "6fec8c6602c6a229b5e7698ed576a1b534a7ba71" }
