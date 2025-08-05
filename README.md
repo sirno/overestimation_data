@@ -67,7 +67,12 @@ uv run scripts/create_figures.sh --load-store
 ```
 
 This command will generate the figures in the `figures/` folder, based on the
-aggregated analysis results in `out/cache/`.
+aggregated analysis results from `out/cache/`, which can be generated from
+the raw data with:
+
+```bash
+uv run scripts/create_figures.sh --save-store
+```
 
 ### Inspect the data
 
